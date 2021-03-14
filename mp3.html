@@ -1,0 +1,164 @@
+<body onload="startup();">
+    <canvas id="myGLCanvas" width="800" height="800" __spector_context_type="webgl"></canvas>
+   <div>
+    <fieldset>
+      <legend>Controls</legend>
+      <emph>Rotate Teapot </emph> <input type="number" id="roll"> Pressing 'a' causes teapot to rotate LEFT. Pressing 'd' causes teapot to rotate RIGHT <br>
+      <emph>Rotate Skybox </emph> <input type="number" id="pitch"> Pressing LEFT Arrow key causes skybox to rotate LEFT. Pressing RIGHT Arrow key causes skybox to rotate RIGHT <br>
+      <emph>Select Mode for Shading teapot:</emph> <br>
+      <input type="radio" id="phong" name="shader" value="phong" checked>
+      <label for="male">Phong</label><br>
+      <input type="radio" id="reflection" name="shader" value="reflection">
+      <label for="female">Reflection</label><br>
+      <input type="radio" id="refraction" name="shader" value="refraction">
+      <label for="other">Refraction</label>
+      <br><br>
+      <input type="radio" id="skybox-london" name="SkyboxControl" value="0" checked>
+      <label for="">London Skybox</label><br>
+      <input type="radio" id="skybox-delhi" name="SkyboxControl" value="1">
+      <label for="">My Own Skybox</label><br>
+  </fieldset>
+   </div>
+<!-- vertex shader -->
+<script  id="shader-skybox-vs" type="x-shader/x-vertex">
+attribute vec4 aVertexPosition;
+varying vec4 v_position;
+void main() {
+  v_position = aVertexPosition;
+  gl_Position = aVertexPosition;
+  gl_Position.z = 1.0;
+}
+</script>
+<!-- fragment shader -->
+<script  id="shader-skybox-fs" type="x-shader/x-fragment">
+precision mediump float;
+
+uniform samplerCube u_skybox;
+uniform mat4 u_viewDirectionProjectionInverse;
+
+varying vec4 v_position;
+void main() {
+  vec4 t = u_viewDirectionProjectionInverse * v_position;
+  gl_FragColor = textureCube(u_skybox, normalize(t.xyz / t.w));
+}
+</script>
+
+<script id="shader-vs" type="x-shader/x-vertex">
+    attribute vec3 aVertexNormal;
+    attribute vec3 aVertexPosition;
+   
+    uniform mat4 uMVMatrix;
+    uniform mat4 uRMatrix;
+    uniform vec3 cameraPosition;
+    
+    uniform mat4 uPMatrix;
+    uniform mat3 uNMatrix;
+
+    uniform mat4 uSkyboxMV;
+
+    varying vec3 vNormal;
+    varying vec3 vPosition;
+    uniform float uMode;
+    varying float shaderMode;
+
+    varying vec3 R;
+    varying vec3 T;
+
+    void main(void) {
+        shaderMode = uMode;
+        // Get the vertex position in eye coordinates
+        vec4 vertexPositionEye4 = uMVMatrix * vec4(aVertexPosition, 1.0);
+        vec4 vertexPositionEye4_1 = uSkyboxMV * vec4(aVertexPosition, 1.0);
+        vPosition = vertexPositionEye4_1.xyz / vertexPositionEye4_1.w;
+        vec3 vPosition1 = vertexPositionEye4_1.xyz / vertexPositionEye4_1.w;
+        // Calculate the normal
+        vNormal = normalize(uNMatrix * aVertexNormal); // vNormal = normalEye
+
+        gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+
+        //vec3 eyePos = normalize(mat3(uRMatrix) * vPosition);
+        //vec3 N = normalize(mat3(uRMatrix) * vNormal);
+        vec4 worldPos = uSkyboxMV*vec4(vPosition1,1.0);
+        if (uMode == 1.0) {
+          vec3 eyePos = normalize(worldPos.xyz - cameraPosition);
+          vec4 N = uSkyboxMV*vec4(vNormal,1.0);
+          R = normalize(reflect(eyePos.xyz, N.xyz));
+        } else if (uMode == 2.0) {
+          vec4 eyePos = normalize(vec4(vPosition1,1.0));
+          vec4 NN = uSkyboxMV * vec4(vNormal,1.0);
+          vec3 N = normalize(NN.xyz);
+          T = normalize(refract(eyePos.xyz, N,1.00/1.33));
+        }
+    }
+   
+</script><script id="shader-fs" type="x-shader/x-fragment">
+    precision mediump float;
+
+    varying vec3 vNormal; // normalEye
+    varying vec3 vPosition;
+
+    uniform vec3 uLightPosition;
+    uniform vec3 uAmbientLightColor;
+    uniform vec3 uDiffuseLightColor;
+    uniform vec3 uSpecularLightColor;
+    uniform vec3 uAmbientMaterialColor;
+    uniform vec3 uDiffuseMaterialColor;
+    uniform vec3 uSpecularMaterialColor;
+    
+    uniform float uShininess;
+    uniform samplerCube texMap;
+
+    varying float shaderMode;
+    varying vec3 R;
+    varying vec3 T;
+
+    void main(void) {
+        vec3 vertexPositionEye3 = vPosition.xyz;
+  
+        // Calculate the vector (l) to the light source
+        vec3 vectorToLightSource = normalize(uLightPosition - vertexPositionEye3);
+        //vec3 vectorToLightSource = vec3(1.0,1.0,1.0);
+
+        // Calculate n dot l for diffuse lighting
+        float diffuseLightWeightning = max(dot(vNormal, vectorToLightSource), 0.0);
+
+        // Calculate the reflection vector (r) that is needed for specular light
+        vec3 reflectionVector = normalize(reflect(-vectorToLightSource, vNormal));
+        
+        // The camera in view coordinates is located in the origin and is pointing
+        // along the negative z-axis. Calculate viewVector (v) 
+        // in eye coordinates as:
+        // (0.0, 0.0, 0.0) - vertexPositionEye3
+        vec3 viewVectorEye = -normalize(vertexPositionEye3);
+    
+        float rdotv = max(dot(reflectionVector, viewVectorEye), 0.0);
+    
+        float specularLightWeightning = pow(rdotv, uShininess);
+
+        // Sum up all three reflection components (no need to send to fragment shader)
+        if (shaderMode == 0.0) {
+              gl_FragColor = vec4(((uAmbientLightColor*uAmbientMaterialColor)
+                + (uDiffuseLightColor*uDiffuseMaterialColor) * diffuseLightWeightning
+                + (uSpecularLightColor*uSpecularMaterialColor) * specularLightWeightning),1.0);
+        } else if (shaderMode == 1.0) {
+            vec4 texColor = textureCube(texMap, R);
+            gl_FragColor = texColor;
+        } else {
+          vec4 WHITE = vec4(1.0, 1.0, 1.0, 1.0);
+          vec4 refractColor = textureCube(texMap,T); // look up texture
+          vec4 texColor = mix(refractColor,WHITE,0.3);
+
+          gl_FragColor = texColor;
+        }
+
+    }
+</script><!--
+for most samples webgl-utils only provides shader compiling/linking and
+canvas resizing because why clutter the examples with code that's the same in every sample.
+See https://webglfundamentals.org/webgl/lessons/webgl-boilerplate.html
+and https://webglfundamentals.org/webgl/lessons/webgl-resizing-the-canvas.html
+for webgl-utils, m3, m4, and webgl-lessons-ui.
+-->
+<script src="./gl-matrix-min.js"></script>
+<script src="./mp3.js"></script>
+<script src="./TriMesh.js"></script>
