@@ -399,7 +399,7 @@ function setupSkyboxTexture(control) {
       },
     ];
   } else {
-    console.log("we are here");
+    //console.log("we are here");
     faceInfos = [
       {
         target: gl.TEXTURE_CUBE_MAP_POSITIVE_X,
@@ -542,13 +542,14 @@ function draw() {
     glMatrix.mat4.lookAt(cameraMatrix,eyePt,viewPt,up);
     glMatrix.mat4.invert(mvMatrix,cameraMatrix);  
     // glMatrix.vec3.multiply(lightPosition, mvMatrix, lightPosition); 
-    glMatrix.mat4.invert(uRMatrix,mvMatrix);
+    //glMatrix.mat4.invert(uRMatrix,mvMatrix);
     // glMatrix.vec3.multiply(lightPosition, cameraMatrix, lightPosition);
  
     //Draw mesh
     glMatrix.vec3.set(transformVec,-0.3,-1,-10);
     glMatrix.mat4.translate(mvMatrix, mvMatrix,transformVec);
     glMatrix.mat4.rotateY(mvMatrix, mvMatrix, degToRad(rotTea));
+    glMatrix.mat4.invert(uRMatrix,mvMatrix);
 
     if (teapot.isLoaded == true) {
       // glMatrix.vec3.multiply(lightPosition, mvMatrix, lightPosition);
@@ -625,7 +626,7 @@ function draw() {
 
 function setupSkybox() {
     setupSkyboxShaders();
-    setupBuffers1();
+    //setupBuffers1();
     setupBuffers();
 }
 
